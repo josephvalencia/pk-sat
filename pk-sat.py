@@ -1,4 +1,5 @@
-from pysmt.shortcuts import Symbol, And, Not, Plus, Equals, Real,GE, Implies, get_model, is_sat
+from pysmt.shortcuts import Symbol, And, Not, Plus, Equals, Real,GE,LE, Implies, get_model, is_sat
+from pysmt.typing import BV8, REAL, INT, ArrayType
 
 def energy_score(a1,a2,b1,b2):
 
@@ -14,11 +15,11 @@ def energy_score(a1,a2,b1,b2):
     if key in scores:
         return scores[key]
     else:
-        return None
+        # large value
+        return 0 
 
 def predict_structure(seq):
 
-    conditions = []
     p1 =  []
     p2 = []
     e1 = []
@@ -41,16 +42,23 @@ def predict_structure(seq):
         e1_row = []
         e2_row = []
         for j in range(len(seq)):
-            e = Symbol('E_{},{}'.format(i,j)) 
-            E = Symbol('e_{},{}'.format(i,j)) 
+            e = Symbol('E_{},{}'.format(i,j),REAL) 
+            E = Symbol('e_{},{}'.format(i,j),REAL) 
             e1_row.append(e)
             e2_row.append(E)
         e1.append(e1_row)
         e2.append(e2_row)
 
+    structural_constraints = build_structural_constraints(seq,p1,p2)
+    energy_constraints = build_energy_constraints(seq,p1,p2,e1,e2)
+    all_constraints = structural_constraints+energy_constraints
+    thresh_constraint = energy_threshold_constraint(seq,e1,e2,-5)
 
-def build_energy_constraints(seq,conditions,p1,p2,e1,e2):
+    solve_SMT(all_constraints+[thresh_constraint])
 
+def build_energy_constraints(seq,p1,p2,e1,e2):
+
+    constraints = []
     # assign scores based on bp stacks
     for i in range(len(seq)):
         for j in range(i+1,len(seq)):
@@ -63,14 +71,34 @@ def build_energy_constraints(seq,conditions,p1,p2,e1,e2):
             e2_stack_score = Implies(And(p2[i][j],p2[i+1][j-1]),Equals(e2[i][j],Real(bp_stack_energy)))
             e1_nostack_score = Implies(Not(And(p1[i][j],p1[i+1][j-1])),Equals(e1[i][j],Real(0.0)))
             e2_nostack_score = Implies(And(p2[i][j],p2[i+1][j-1]),Equals(e2[i][j],Real(0.0)))
-   
+            new_constraints = [e1_stack_score,e2_stack_score,e1_nostack_score,e2_nostack_score]
+            constraints.extend(new_constraints)
+
+    # all bp stacks accounted for
+    for i in range(1,len(seq)-1):
+        for j in range(i+1,len(seq)-1):
+            p1_constraint = And(Not(p1[i-1][j+1]),p1[i][j],Not(p1[i+1][j-1])) 
+            p2_constraint = And(Not(p2[i-1][j+1]),p2[i][j],Not(p2[i+1][j-1])) 
+            constraints.append(p1_constraint)  
+            constraints.append(p2_constraint)  
+
+    return constraints
+
+def energy_threshold_constraint(seq,e1,e2,threshold):
+
     # check if total energy threshold is exceeded
+    total = []
+    for i in range(len(seq)):
+        for j in range(i+1,len(seq)):
+           total.append(e1[i][j])
+           total.append(e2[i][j])
+    
+    free_energy = LE(Plus(total),Real(threshold))
+    return free_energy
 
+def build_structural_constraints(seq,p1,p2):
 
-
-def build_structural_constraints(seq,conditions,p1,p2):
-
-
+    conditions = []
     # every position can be in at most one bp
     for i in range(len(seq)):
         for j in range(i+1,len(seq)):
@@ -120,11 +148,12 @@ def build_structural_constraints(seq,conditions,p1,p2):
 
     return conditions
 
-def solve(conditions):
+def solve_SMT(conditions):
 
-    # build structural SAT formula
+    print("# Clauses = {}".format(len(conditions)))
+    
+    # build SAT/SMT formula as conjunction of all terms
     formula = conditions[0]
-    print("# SAT clauses = {}".format(len(conditions)))
     for c in conditions[1:]:
        formula = And(formula,c)
 
@@ -135,12 +164,11 @@ def solve(conditions):
     else:
         print("No solution found")
 
-
 if __name__ == "__main__":
 
     pkb115_seq = 'CGGUAGCGCGAACCUUAUCGCGCA'
     pkb115_struct = ':(((:[[[[[[))):::]]]]]]:'
-    build_structural_constraints(pkb115_seq)
+    predict_structure(pkb115_seq)
 
 
 	
