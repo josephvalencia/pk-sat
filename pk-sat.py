@@ -15,8 +15,8 @@ def energy_score(a1,a2,b1,b2):
     if key in scores:
         return scores[key]
     else:
-        # large value
-        return 0 
+        # 'large' value
+        return 1
 
 def predict_structure(seq):
 
