@@ -1,9 +1,10 @@
-from pysmt.shortcuts import Symbol, And, Not, Plus, Equals, Real,GE,LE, Implies, get_model, is_sat
+from pysmt.shortcuts import Symbol, And, Not, Plus, Equals, Real,GE,LE, Implies, get_model, is_sat, get_formula_size
 from pysmt.typing import BV8, REAL, INT, ArrayType
 
 def energy_score(a1,a2,b1,b2):
 
     key = a1+a2+b1+b2
+    print(key)    
     
     scores = {'AUAU': -1.1,'AUCG' : -2.1 ,'AUGC' : -2.2 ,'AUGU' : -1.4 , 'AUUG' :  -0.9, 'AUUA' :-0.6 ,\
             'CGAU' : -2.1 , 'CGCG' : -2.4 , 'CGGC' : -3.3 , 'CGGU' : -2.1, 'CGUG' : -2.1 , 'CGUA' : -1.4 ,\
@@ -16,7 +17,7 @@ def energy_score(a1,a2,b1,b2):
         return scores[key]
     else:
         # 'large' value
-        return 1
+        return 1000
 
 def predict_structure(seq):
 
@@ -52,21 +53,27 @@ def predict_structure(seq):
     structural_constraints = build_structural_constraints(seq,p1,p2)
     energy_constraints = build_energy_constraints(seq,p1,p2,e1,e2)
     all_constraints = structural_constraints+energy_constraints
-    thresh_constraint = energy_threshold_constraint(seq,e1,e2,-5)
+    thresh_constraint = energy_threshold_constraint(seq,e1,e2,-50)
 
-    solve_SMT(all_constraints+[thresh_constraint])
+    solve_SMT(all_constraints+[thresh_constraint],p1,p2,e1,e2,seq)
 
 def build_energy_constraints(seq,p1,p2,e1,e2):
 
     constraints = []
+    MIN_BP_DIST = 3
     # assign scores based on bp stacks
     for i in range(len(seq)):
         for j in range(i+1,len(seq)):
-            nuc1 = seq[i]
-            nuc2 = seq[j]
-            nuc3 = seq[i+1]
-            nuc4 = seq[j-1]
-            bp_stack_energy = energy_score(nuc1,nuc2,nuc3,nuc4) 
+            bp_stack_energy = 0.0
+            if j -i >= MIN_BP_DIST:
+                nuc1 = seq[i]
+                nuc2 = seq[j]
+                nuc3 = seq[i+1]
+                nuc4 = seq[j-1]
+                bp_stack_energy = energy_score(nuc1,nuc2,nuc3,nuc4) 
+            else:
+                bp_stack_energy = 1000
+
             e1_stack_score = Implies(And(p1[i][j],p1[i+1][j-1]),Equals(e1[i][j],Real(bp_stack_energy)))
             e2_stack_score = Implies(And(p2[i][j],p2[i+1][j-1]),Equals(e2[i][j],Real(bp_stack_energy)))
             e1_nostack_score = Implies(Not(And(p1[i][j],p1[i+1][j-1])),Equals(e1[i][j],Real(0.0)))
@@ -81,7 +88,7 @@ def build_energy_constraints(seq,p1,p2,e1,e2):
             p2_constraint = And(Not(p2[i-1][j+1]),p2[i][j],Not(p2[i+1][j-1])) 
             constraints.append(p1_constraint)  
             constraints.append(p2_constraint)  
-
+    
     return constraints
 
 def energy_threshold_constraint(seq,e1,e2,threshold):
@@ -99,6 +106,7 @@ def energy_threshold_constraint(seq,e1,e2,threshold):
 def build_structural_constraints(seq,p1,p2):
 
     conditions = []
+    
     # every position can be in at most one bp
     for i in range(len(seq)):
         for j in range(i+1,len(seq)):
@@ -148,25 +156,55 @@ def build_structural_constraints(seq,p1,p2):
 
     return conditions
 
-def solve_SMT(conditions):
-
-    print("# Clauses = {}".format(len(conditions)))
+def solve_SMT(conditions,p1,p2,e1,e2,seq):
     
     # build SAT/SMT formula as conjunction of all terms
     formula = conditions[0]
     for c in conditions[1:]:
        formula = And(formula,c)
 
+    print('Size of formula = {}'.format(get_formula_size(formula)))
+    print(formula.serialize())
+    
     # find satisfying assignment if one exists
-    model = get_model(formula)
+    print('Finding assignment')
+    model = get_model(formula,solver_name="z3")
     if model:
         print(model)
+        print_structure(model,p1,p2,e1,e2,seq)
     else:
         print("No solution found")
 
+def print_structure(model,p1,p2,e1,e2,seq):
+
+    total_energy = 0
+    structure = ['.'] * len(seq)
+
+    for i in range(len(seq)):
+        for j in range(i+1,len(seq)):
+            # sum free energies
+            energy_a = float(model.get_py_value(e1[i][j]))
+            energy_b = float(model.get_py_value(e2[i][j]))
+            total_energy += energy_a
+            total_energy += energy_b
+            # assemble dot-bracket
+            bp_a = p1[i][j]
+            bp_b = p2[i][j]
+            if model.get_py_value(bp_a):
+                structure[i] = '('
+                structure[j] = ')'
+            elif model.get_py_value(bp_b):
+                structure[i] = '['
+                structure[j] = ']'
+    
+    structure = ''.join(structure)
+    print('Predicted Structure = {}'.format(structure))
+    print('Free Energy = {}'.format(total_energy))
+
 if __name__ == "__main__":
 
-    pkb115_seq = 'CGGUAGCGCGAACCUUAUCGCGCA'
+    #pkb115_seq = 'CGGUAGCGCGAACCUUAUCGCGCA'
+    pkb115_seq = 'GC'
     pkb115_struct = ':(((:[[[[[[))):::]]]]]]:'
     predict_structure(pkb115_seq)
 
