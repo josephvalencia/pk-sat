@@ -53,7 +53,7 @@ def predict_structure(seq):
     structural_constraints = build_structural_constraints(seq,p1,p2)
     energy_constraints = build_energy_constraints(seq,p1,p2,e1,e2)
     all_constraints = structural_constraints+energy_constraints
-    thresh_constraint = energy_threshold_constraint(seq,e1,e2,-50)
+    thresh_constraint = energy_threshold_constraint(seq,e1,e2,0)
 
     solve_SMT(all_constraints+[thresh_constraint],p1,p2,e1,e2,seq)
 
@@ -63,31 +63,33 @@ def build_energy_constraints(seq,p1,p2,e1,e2):
     MIN_BP_DIST = 3
     # assign scores based on bp stacks
     for i in range(len(seq)):
-        for j in range(i+1,len(seq)):
-            bp_stack_energy = 0.0
-            if j -i >= MIN_BP_DIST:
-                nuc1 = seq[i]
-                nuc2 = seq[j]
-                nuc3 = seq[i+1]
-                nuc4 = seq[j-1]
-                bp_stack_energy = energy_score(nuc1,nuc2,nuc3,nuc4) 
-            else:
-                bp_stack_energy = 1000
+        for j in range(len(seq)):
+            if i < j:
+                bp_stack_energy = 0.0
+                if j-i >= MIN_BP_DIST:
+                    nuc1 = seq[i]
+                    nuc2 = seq[j]
+                    nuc3 = seq[i+1]
+                    nuc4 = seq[j-1]
+                    bp_stack_energy = energy_score(nuc1,nuc2,nuc3,nuc4) 
+                else:
+                    bp_stack_energy = 1000
 
-            e1_stack_score = Implies(And(p1[i][j],p1[i+1][j-1]),Equals(e1[i][j],Real(bp_stack_energy)))
-            e2_stack_score = Implies(And(p2[i][j],p2[i+1][j-1]),Equals(e2[i][j],Real(bp_stack_energy)))
-            e1_nostack_score = Implies(Not(And(p1[i][j],p1[i+1][j-1])),Equals(e1[i][j],Real(0.0)))
-            e2_nostack_score = Implies(And(p2[i][j],p2[i+1][j-1]),Equals(e2[i][j],Real(0.0)))
-            new_constraints = [e1_stack_score,e2_stack_score,e1_nostack_score,e2_nostack_score]
-            constraints.extend(new_constraints)
+                e1_stack_score = Implies(And(p1[i][j],p1[i+1][j-1]),Equals(e1[i][j],Real(bp_stack_energy)))
+                e2_stack_score = Implies(And(p2[i][j],p2[i+1][j-1]),Equals(e2[i][j],Real(bp_stack_energy)))
+                e1_nostack_score = Implies(Not(And(p1[i][j],p1[i+1][j-1])),Equals(e1[i][j],Real(0.0)))
+                e2_nostack_score = Implies(And(p2[i][j],p2[i+1][j-1]),Equals(e2[i][j],Real(0.0)))
+                new_constraints = [e1_stack_score,e2_stack_score,e1_nostack_score,e2_nostack_score]
+                constraints.extend(new_constraints)
 
     # all bp stacks accounted for
     for i in range(1,len(seq)-1):
-        for j in range(i+1,len(seq)-1):
-            p1_constraint = And(Not(p1[i-1][j+1]),p1[i][j],Not(p1[i+1][j-1])) 
-            p2_constraint = And(Not(p2[i-1][j+1]),p2[i][j],Not(p2[i+1][j-1])) 
-            constraints.append(p1_constraint)  
-            constraints.append(p2_constraint)  
+        for j in range(1,len(seq)-1):
+            if i < j:
+                p1_constraint = Not(And(Not(p1[i-1][j+1]),p1[i][j],Not(p1[i+1][j-1]))) 
+                p2_constraint = Not(And(Not(p2[i-1][j+1]),p2[i][j],Not(p2[i+1][j-1]))) 
+                constraints.append(p1_constraint)  
+                constraints.append(p2_constraint)  
     
     return constraints
 
@@ -96,7 +98,7 @@ def energy_threshold_constraint(seq,e1,e2,threshold):
     # check if total energy threshold is exceeded
     total = []
     for i in range(len(seq)):
-        for j in range(i+1,len(seq)):
+        for j in range(len(seq)):
            total.append(e1[i][j])
            total.append(e2[i][j])
     
@@ -109,50 +111,54 @@ def build_structural_constraints(seq,p1,p2):
     
     # every position can be in at most one bp
     for i in range(len(seq)):
-        for j in range(i+1,len(seq)):
-            for k in range(j+1,len(seq)):
-                p1_internal = Not(And(p1[i][j],p1[j][k]))
-                p2_internal = Not(And(p2[i][j],p2[j][k]))
-                p1_first = Not(And(p1[i][j],p2[j][k]))
-                p2_first = Not(And(p2[i][j],p1[j][k]))
-                new_conditions = [p1_internal,p2_internal,p1_first,p2_first]
-                conditions.extend(new_conditions)
+        for j in range(len(seq)):
+            for k in range(len(seq)):
+                if i < j and j < k:
+                    p1_internal = Not(And(p1[i][j],p1[j][k]))
+                    p2_internal = Not(And(p2[i][j],p2[j][k]))
+                    p1_first = Not(And(p1[i][j],p2[j][k]))
+                    p2_first = Not(And(p2[i][j],p1[j][k]))
+                    new_conditions = [p1_internal,p2_internal,p1_first,p2_first]
+                    conditions.extend(new_conditions)
 
     # bp must belong to either page1 or page2
     for i in range(len(seq)):
-        for j in range(i+1,len(seq)):
+        for j in range(len(seq)):
             unique_page = Not(And(p1[i][j],p2[i][j]))
             conditions.append(unique_page)
 
     # no internal pseudoknots
     for i in range(len(seq)):
-        for k in range(i+1,len(seq)):
-            for j in range(k+1,len(seq)):
-                for l in range(j+1,len(seq)):
-                    p1_pk = Not(And(p1[i][j],p1[k][l]))
-                    p2_pk = Not(And(p2[i][j],p2[k][l]))
-                    conditions.append(p1_pk)
-                    conditions.append(p2_pk)
+        for k in range(len(seq)):
+            for j in range(len(seq)):
+                for l in range(len(seq)):
+                    if i < k and k < j and j < l:
+                        p1_pk = Not(And(p1[i][j],p1[k][l]))
+                        p2_pk = Not(And(p2[i][j],p2[k][l]))
+                        conditions.append(p1_pk)
+                        conditions.append(p2_pk)
 
     # only nested bp (no splits) on page2
     for i in range(len(seq)):
-        for j in range(i+1,len(seq)):
-            for k in range(j+1,len(seq)):
-                for l in range(k+1,len(seq)):
-                    p2_split = Not(And(p2[i][j],p2[k][l]))
-                    conditions.append(p2_split)
+        for j in range(len(seq)):
+            for k in range(len(seq)):
+                for l in range(len(seq)):
+                    if i < j and j < k and k < l:
+                        p2_split = Not(And(p2[i][j],p2[k][l]))
+                        conditions.append(p2_split)
 
     # no double-crossing pseudoknots
     for i in range(len(seq)):
-        for m in range(i+1,len(seq)):
-            for j in range(m+1,len(seq)):
-                for k in range(j+1,len(seq)):
-                    for n in range(k+1,len(seq)):
-                        for l in range(n+1,len(seq)):
-                            downstream = Implies(And(p1[i][j],p2[m][n]),Not(p1[k][l]))
-                            upstream = Implies(And(p1[k][l],p2[m][n]),Not(p1[i][j]))
-                            conditions.append(downstream)
-                            conditions.append(upstream)
+        for m in range(len(seq)):
+            for j in range(len(seq)):
+                for k in range(len(seq)):
+                    for n in range(len(seq)):
+                        for l in range(len(seq)):
+                            if i < m and m < j and j < k and k < n and n < l:
+                                downstream = Implies(And(p1[i][j],p2[m][n]),Not(p1[k][l]))
+                                upstream = Implies(And(p1[k][l],p2[m][n]),Not(p1[i][j]))
+                                conditions.append(downstream)
+                                conditions.append(upstream)
 
     return conditions
 
@@ -203,8 +209,8 @@ def print_structure(model,p1,p2,e1,e2,seq):
 
 if __name__ == "__main__":
 
-    #pkb115_seq = 'CGGUAGCGCGAACCUUAUCGCGCA'
-    pkb115_seq = 'GC'
+    pkb115_seq = 'CGGUAGCGCGAACCUUAUCGCGCA'
+    #pkb115_seq = 'UAGGCCUA'
     pkb115_struct = ':(((:[[[[[[))):::]]]]]]:'
     predict_structure(pkb115_seq)
 
