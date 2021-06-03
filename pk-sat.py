@@ -24,10 +24,8 @@ def predict_structure(seq):
     p1 = {}
     p2 = {}
     e1 = {}
-    e2 = {}
+    e2 =  {}
 
-    val1 = 0
-    val2 = 0
     # intialize n*n pairing variables for two pages
     for i in range(len(seq)):
         p1[i] = {}
@@ -38,7 +36,6 @@ def predict_structure(seq):
                 y = Symbol('Y_{},{}'.format(i,j)) 
                 p1[i][j] = x
                 p2[i][j] = y
-                val1 +=1
 
     # initialize n*n energy scores for two pages
     for i in range(len(seq)):
@@ -50,15 +47,40 @@ def predict_structure(seq):
                 E = Symbol('e_{},{}'.format(i,j),REAL) 
                 e1[i][j] = e
                 e2[i][j] = E
-                val2 +=1
 
-    print('# of pairing vars = {}, # of energy scores = {}'.format(val1,val2))
     structural_constraints = build_structural_constraints(seq,p1,p2)
     energy_constraints = build_energy_constraints(seq,p1,p2,e1,e2)
     all_constraints = structural_constraints+energy_constraints
-    thresh_constraint = energy_threshold_constraint(seq,e1,e2,-8)
-    solve_SMT(all_constraints+[thresh_constraint],p1,p2,e1,e2,seq)
-    #solve_SMT(structural_constraints,p1,p2,e1,e2,seq)
+    
+    min_fe = 0
+    max_fe = (len(seq) // 2) * -3.4 # best possible configuration is 100% nesting of CG
+    print('Max Theoretical FE = {}'.format(max_fe))
+    print('# Clauses = {}'.format(len(all_constraints)+1))
+    best_struct = ''.join(['.']*len(seq))
+    best_fe = 0
+    for it in range(10):
+        threshold = (min_fe+max_fe) / 2 
+        thresh_constraint = energy_threshold_constraint(seq,e1,e2,threshold)
+        print('_______________\nit # {} @  FE thresh = {}'.format(it,threshold))
+        solution = solve_SMT(all_constraints+[thresh_constraint],p1,p2,e1,e2,seq)
+        if solution is not None:
+            structure,free_energy = solution
+            print('Predicted  = {}'.format(structure))
+            print('Free Energy = {}'.format(free_energy))
+            min_fe = free_energy
+            improvement = best_fe - free_energy
+            best_struct = structure
+            best_fe = free_energy
+            if improvement < 0.1:
+                break
+        else:
+            print('No solution found')
+            max_fe = threshold
+        
+    print('***************\nBest Solution')
+    print('Predicted = {}'.format(best_struct))
+    print('Free Energy = {}'.format(best_fe))
+    print('***************')
 
 def build_energy_constraints(seq,p1,p2,e1,e2):
 
@@ -185,25 +207,25 @@ def solve_SMT(conditions,p1,p2,e1,e2,seq):
     for c in conditions[1:]:
        formula = And(formula,c)
     
-    print('Size of formula = {}'.format(get_formula_size(formula)))
-   
-    s = time.time()  
     # find satisfying assignment if one exists
     print('Finding assignment')
+    s = time.time()  
     model = get_model(formula,solver_name="z3")
-    if model:
-        print_structure(model,p1,p2,e1,e2,seq)
-    else:
-        print("No solution found")
-    
     e = time.time()
-    print('Time elapsed : {} seconds'.format(e-s))
+    print('Time elapsed = {} seconds'.format(e-s))
+    if model:
+        value = get_structure(model,p1,p2,e1,e2,seq)
+    else:
+        value = None
 
-def print_structure(model,p1,p2,e1,e2,seq):
+    return value
+
+def get_structure(model,p1,p2,e1,e2,seq):
 
     total_energy = 0
     structure = ['.'] * len(seq)
-
+    print('Solution found!')
+    chars_set = False
     for i in range(len(seq)-1):
         for j in range(i+1,len(seq)):
             # sum free energies
@@ -219,17 +241,25 @@ def print_structure(model,p1,p2,e1,e2,seq):
             bp_a = model.get_py_value(p1[i][j])
             bp_b = model.get_py_value(p2[i][j])
             if bp_a:
-                structure[i] = '('
-                structure[j] = ')'
+                # page variables arbitrarily but left-most output page given rounded brackets
+                if not chars_set:
+                    page1_chars = ('(',')')
+                    page2_chars = ('[',']')
+                    chars_set = True
+                structure[i] = page1_chars[0]
+                structure[j] = page1_chars[1]
                 print('X[{}][{}] = {}'.format(i,j,bp_a)) 
             elif bp_b:
-                structure[i] = '['
-                structure[j] = ']'
+                if not chars_set:
+                    page2_chars = ('(',')')
+                    page1_chars = ('[',']')
+                    chars_set = True 
+                structure[i] = page2_chars[0]
+                structure[j] = page2_chars[1]
                 print('Y[{}][{}] = {}'.format(i,j,bp_b)) 
     
     structure = ''.join(structure)
-    print('Predicted Structure = {}'.format(structure))
-    print('Free Energy = {}'.format(total_energy))
+    return structure,total_energy
 
 if __name__ == "__main__":
 
