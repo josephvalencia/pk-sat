@@ -58,8 +58,14 @@ def predict_structure(seq):
     print('# Clauses = {}'.format(len(all_constraints)+1))
     best_struct = ''.join(['.']*len(seq))
     best_fe = 0
+    threshold = 0
     for it in range(10):
-        threshold = (min_fe+max_fe) / 2 
+        prev_threshold = threshold
+        threshold = (min_fe+max_fe) / 2
+        step_size = threshold - prev_threshold
+        if abs(step_size) < 0.1:
+            print('Binary search converged, stopping early!')
+            break
         thresh_constraint = energy_threshold_constraint(seq,e1,e2,threshold)
         print('_______________\nit # {} @  FE thresh = {}'.format(it,threshold))
         solution = solve_SMT(all_constraints+[thresh_constraint],p1,p2,e1,e2,seq)
@@ -71,8 +77,6 @@ def predict_structure(seq):
             improvement = best_fe - free_energy
             best_struct = structure
             best_fe = free_energy
-            if improvement < 0.1:
-                break
         else:
             print('No solution found')
             max_fe = threshold
