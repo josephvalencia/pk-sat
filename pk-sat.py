@@ -276,4 +276,5 @@ if __name__ == "__main__":
     pkb115_seq = 'CGGUAGCGCGAACCUUAUCGCGCA'
     #pkb115_seq = 'UAGGCCUA'
     pkb115_struct = '.(((.[[[[[[)))...]]]]]].'
-    predict_structure(pkb115_seq)
+    #seq = 'AUAAUAGAAUAGGACGUUUGGUUCUAUUUUGUUGGUUUCUAGGACCAUCGU'
+    predict_structure(pkb115_seq,doubleknots=False)
