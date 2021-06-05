@@ -52,9 +52,55 @@ def yes_external_pks(pages):
                             conditions.append(Implies(page[i][j], qage(k, l))) # THIS IS THE LOGIC I'M UNSURE OF
     return conditions
 
+# eq 8 and 9
+def no_isolated_pairs(pages):
+    conditions = []
+    for page in pages:
+        (rows, cols) = page.shape()
+        for i in range(rows):
+            l1 = False
+            l2 = False
+            l3 = False
+            for j in range(i + 1, cols):
+                try:
+                    l1 = Or(l1, page[i - 1][j])
+                except IndexError: # handle edge of page
+                    pass
+
+                # how to handle the middle case, with 1 - l_i?
+
+                try:
+                    l3 = Or(l1, page[i + 1][j])
+                except IndexError: # handle edge of page
+                    pass
+            l = Or(l1, Or(l2, l3))
+
+            r1 = False
+            r2 = False
+            r3 = False
+            for j in range(0, i):
+                try:
+                    r1 = Or(r1, page[i - 1][j])
+                except IndexError: # handle edge of page
+                    pass
+
+                # how to handle the middle case, with 1 - l_i?
+
+                try:
+                    r3 = Or(r1, page[i + 1][j])
+                except IndexError: # handle edge of page
+                    pass
+            r = Or(r1, Or(r2, r3))
+            conditions.append(l)
+            conditions.append(r)
+
+    return conditions
+
+
+
 
 def structural_constraints(pages):
-    return one_pairing(pages) + no_internal_pks(pages) + yes_external_pks(pages)
+    return one_pairing(pages) + no_internal_pks(pages) + yes_external_pks(pages) + no_isolated_pairs(pages)
 
 
 ig __name__ == '__main__':
