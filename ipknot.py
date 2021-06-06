@@ -27,8 +27,8 @@ def no_internal_pks(pages,pairs,probs,n):
             for i,j in pairs:
                 for k,l in pairs:
                     if i < k and k < j and j < l:
-                        if probs[i][j] != 0.0 and probs[k][l] != 0.0:
-                            conditions.append(Not(And(page[i][j],page[k][l])))
+                        #if probs[i][j] != 0.0 and probs[k][l] != 0.0:
+                        conditions.append(Not(And(page[i][j],page[k][l])))
                     pbar.update(1)
     return conditions
 
@@ -43,8 +43,11 @@ def yes_external_pks(pages,pairs,probs,n):
         for i,j in pairs:
             if (i < k and k < j and j <l) or (k < i and i < l and l<j):
                 potential_pks.append(p1[i][j])
-        is_pk = Implies(p2[k][l],Or(potential_pks))
-        conditions.append(is_pk)
+        if len(potential_pks) >0:
+            is_pk = Implies(p2[k][l],Or(potential_pks))
+            conditions.append(is_pk)
+        else:
+            conditions.append(Not(p2[k][l]))
     #print(conditions)
     return conditions
 
@@ -60,7 +63,7 @@ def no_isolated_pairs(pages,pairs,probs,n):
             # inside neigbor
             if i+1 in page and j-1 in page[i+1]:
                 neighbors.append(page[i+1][j-1])
-            # if i,j is a pair, i-1,j+1 or i+1,j-1 must be a pair
+            # if (i,j) is a pair, (i-1,j+1) or (i+1,j-1) must be a pair
             if len(neighbors) >0:
                 stack_required = Implies(page[i][j],Or(neighbors))
                 conditions.append(stack_required)
@@ -77,16 +80,25 @@ def score_constraints(pages,scores,pairs,probs,n):
 
     constraints = []
     # assign scores based on bp stacks
-    for score in scores: 
+    for page,score in zip(pages,scores): 
         for i,j in pairs:
-            if i+1 in scores and j-1 in scores[i+1][j-1]:
-                stack_score = Implies(And(score[i][j],score[i+1][j-1]),Equals(score[i][j],Real(probs[i][j])))
-                nostack_score = Implies(Not(And(score[i][j],score[i+1][j-1])),Equals(score[i][j],Real(0.0)))
+            '''
+            neighbors = []
+            if i+1 in page and j-1 in page[i+1]:
+                neighbors.append(page[ 
+
+                stack_score = Implies(And(page[i][j],page[i+1][j-1]),Equals(score[i][j],Real(probs[i][j])))
+                nostack_score = Implies(Not(And(page[i][j],page[i+1][j-1])),Equals(score[i][j],Real(0.0)))
                 constraints.append(stack_score)
-                constraints.append(stack_score)
+                constraints.append(nostack_score)
             else:
                 constraints.append(Equals(score[i][j],Real(0.0)))
-
+            '''
+            stack_score = Implies(page[i][j],Equals(score[i][j],Real(probs[i][j])))
+            nostack_score = Implies(Not(page[i][j]),Equals(score[i][j],Real(0.0)))
+            constraints.append(stack_score)
+            constraints.append(nostack_score)
+    
     return constraints
 
 def score_threshold_constraint(scores,pairs,threshold):
@@ -127,7 +139,7 @@ def predict_structure(seq,doubleknots=False):
     
     structural = structural_constraints([p1,p2],pairs,probs,len(seq))  
     score = score_constraints([p1,p2],[e1,e2],pairs,probs,len(seq))
-    thresh = score_threshold_constraint([e1,e2],pairs,0)
+    thresh = score_threshold_constraint([e1,e2],pairs,5.5)
     all_constraints = structural+ score + [thresh]
     solution = solve_SMT(all_constraints,[p1,p2],[e1,e2],pairs,seq)
     print(solution)
