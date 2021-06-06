@@ -9,12 +9,14 @@ from tqdm import tqdm
 def one_pairing(pages,pairs,probs,n):
     conditions = []
     m = len(pages)
-    for z in range(n):
+    for i in range(n):
         unique = []
         for page in pages: # for each page
             for a,b in pairs:
-                if (b == z and a < z) or (a == z and b > z):
+                # i can be the left or right member
+                if b == i or a == i:
                     unique.append(page[a][b])
+        # only one bp allowed
         conditions.append(AtMostOne(unique))
     return conditions
 
@@ -26,13 +28,13 @@ def no_internal_pks(pages,pairs,probs,n):
         for page in pages:
             for i,j in pairs:
                 for k,l in pairs:
+                    # this ordering indicates a pk, so both bp cannot be true
                     if i < k and k < j and j < l:
-                        #if probs[i][j] != 0.0 and probs[k][l] != 0.0:
                         conditions.append(Not(And(page[i][j],page[k][l])))
                     pbar.update(1)
     return conditions
 
-# every bp on pg2 must have a pk on pg2
+# every bp on pg2 must have a pk on pg1
 # eq 7
 def yes_external_pks(pages,pairs,probs,n):
     p1 = pages[0]
@@ -41,14 +43,16 @@ def yes_external_pks(pages,pairs,probs,n):
     for k,l in pairs:
         potential_pks = []
         for i,j in pairs:
+            # (i,j) can be the leftmost bp or rightmost bp in pk
             if (i < k and k < j and j <l) or (k < i and i < l and l<j):
                 potential_pks.append(p1[i][j])
+        # one or more bp from other page introduces a pk
         if len(potential_pks) >0:
             is_pk = Implies(p2[k][l],Or(potential_pks))
             conditions.append(is_pk)
+        # no bp from other page -> (i,j) not a bp
         else:
             conditions.append(Not(p2[k][l]))
-    #print(conditions)
     return conditions
 
 # eq 8 and 9
@@ -67,60 +71,44 @@ def no_isolated_pairs(pages,pairs,probs,n):
             if len(neighbors) >0:
                 stack_required = Implies(page[i][j],Or(neighbors))
                 conditions.append(stack_required)
+            # no neighbor means this is an illegal isolated` bp
             else:
                 conditions.append(Not(page[i][j]))
-    #print('No isolated')
-    print(conditions)    
     return conditions
 
 def structural_constraints(pages,pairs,probs,n):
     return yes_external_pks(pages,pairs,probs,n) +one_pairing(pages,pairs,probs,n) +no_internal_pks(pages,pairs,probs,n) + no_isolated_pairs(pages,pairs,probs,n)
 
 def score_constraints(pages,scores,pairs,probs,n):
-
     constraints = []
     # assign scores based on bp stacks
     for page,score in zip(pages,scores): 
         for i,j in pairs:
-            '''
-            neighbors = []
-            if i+1 in page and j-1 in page[i+1]:
-                neighbors.append(page[ 
-
-                stack_score = Implies(And(page[i][j],page[i+1][j-1]),Equals(score[i][j],Real(probs[i][j])))
-                nostack_score = Implies(Not(And(page[i][j],page[i+1][j-1])),Equals(score[i][j],Real(0.0)))
-                constraints.append(stack_score)
-                constraints.append(nostack_score)
-            else:
-                constraints.append(Equals(score[i][j],Real(0.0)))
-            '''
+            # no need to check for neighbors, no_isolated_pairs() guarantees this already
             stack_score = Implies(page[i][j],Equals(score[i][j],Real(probs[i][j])))
             nostack_score = Implies(Not(page[i][j]),Equals(score[i][j],Real(0.0)))
             constraints.append(stack_score)
             constraints.append(nostack_score)
-    
     return constraints
 
 def score_threshold_constraint(scores,pairs,threshold):
-
     total = []
     for score in scores:
         for i,j in pairs:
             total.append(score[i][j])
-
     free_energy = GT(Plus(total),Real(threshold))
     return free_energy
 
 def predict_structure(seq,doubleknots=False):
 
+    # legal pairs, lookup table
     pairs,probs = make_adjacency_dict('PKB115.fa', 24)
-    m  = make_matrix('PKB115.fa',24)
+    
+    # intialize pairing and score variables for two pages based on LinearPartition probs
     p1 = {}
     p2 = {}
     e1 = {}
     e2 =  {}
-
-    # intialize n*n pairing variables for two pages
     for i,j in pairs:
         if i not in p1:
             p1[i] = {}
@@ -131,7 +119,6 @@ def predict_structure(seq,doubleknots=False):
         y = Symbol('Y_{},{}'.format(i,j))
         p1[i][j] = x
         p2[i][j] = y
-
         e = Symbol('E_{},{}'.format(i,j),REAL)
         E = Symbol('e_{},{}'.format(i,j),REAL)
         e1[i][j] = e
@@ -143,7 +130,6 @@ def predict_structure(seq,doubleknots=False):
     all_constraints = structural+ score + [thresh]
     solution = solve_SMT(all_constraints,[p1,p2],[e1,e2],pairs,seq)
     print(solution)
-   
 
     '''
     print('# Clauses = {}'.format(len(all_constraints)+1))
