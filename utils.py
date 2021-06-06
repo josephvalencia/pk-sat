@@ -31,7 +31,7 @@ def get_adjacency_dict(f,l):
 
 # give a sequence (as a filename), interface with LinearPartition to generate a readable file for it
 def make_matrix_file(f):
-    os.system(f'cat {f} | ../LinearPartition/linearpartition --prefix ./prob_matrix-{f}')
+    os.system(f'echo {f} | ../LinearPartition/linearpartition --prefix ./prob_matrix-{f}')
 
 # combine above 2 functions (hacky patch with file creation and deletion)
 def make_matrix(f, l):
@@ -53,5 +53,58 @@ def parse_fasta(f):
         for record in SeqIO.parse(inFile,'fasta'):
             yield record.seq
 
+def to_uppercase(seq):
+    return seq.upper()
+
+def to_dot_bracket(struct):
+    return struct.replace(':','.')
+
+def find_bps(struct):
+
+    bp_list = []
+    left_paren_locs = []
+    left_brack_locs = []
+
+    # find left members
+    for i in range(len(struct)):
+        c = struct[i]
+        if c == '(':
+            left_paren_locs.append(i)
+        elif c == '[':
+            left_brack_locs.append(i)
+    # find right paren matches
+    for p in left_paren_locs:
+        count = 1
+        for j in range(p+1,len(struct)):
+            c = struct[j]
+            if c == '(':
+                count +=1
+            elif c == ')':
+                count -=1
+            if count == 0:
+                # plus one for 1-base
+                bp_list.append((p+1,j+1))
+                break
+    # find right brack matches
+    for p in left_brack_locs:
+        count = 1
+        for j in range(p+1,len(struct)):
+            c = struct[j]
+            if c == '[':
+                count +=1
+            elif c == ']':
+                count -=1
+            if count == 0:
+                # plus one for 1-base
+                bp_list.append((p+1,j+1))
+                break 
+    return bp_list
+
 if __name__ == '__main__':
-    pass
+
+    pkb115 = to_dot_bracket(':(((:[[[[[[))):::]]]]]]:')
+    print(pkb115)
+    print(find_bps(pkb115))
+
+    
+

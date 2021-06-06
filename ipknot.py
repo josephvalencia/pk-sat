@@ -102,8 +102,8 @@ def score_threshold_constraint(scores,pairs,threshold):
 def predict_structure(seq,doubleknots=False):
 
     # legal pairs, lookup table
-    pairs,probs = make_adjacency_dict('PKB115.fa', 24)
-    
+    pairs,probs = make_adjacency_dict(seq, len(seq))
+
     # intialize pairing and score variables for two pages based on LinearPartition probs
     p1 = {}
     p2 = {}
@@ -126,11 +126,13 @@ def predict_structure(seq,doubleknots=False):
     
     structural = structural_constraints([p1,p2],pairs,probs,len(seq))  
     score = score_constraints([p1,p2],[e1,e2],pairs,probs,len(seq))
-    thresh = score_threshold_constraint([e1,e2],pairs,5.5)
+    thresh = score_threshold_constraint([e1,e2],pairs,10)
     all_constraints = structural+ score + [thresh]
+    s = time.time()
     solution = solve_SMT(all_constraints,[p1,p2],[e1,e2],pairs,seq)
+    e = time.time()
     print(solution)
-
+    print(e-s)
     '''
     print('# Clauses = {}'.format(len(all_constraints)+1))
     best_struct = ''.join(['.']*len(seq))
@@ -201,7 +203,6 @@ def get_structure(model,pages,scores,pairs,seq):
     print('Solution found!')
     chars_set = False
     for i,j in pairs:            
-            
             energy_a = float(model.get_py_value(e1[i][j]))
             energy_b = float(model.get_py_value(e2[i][j]))
             if energy_a != 0.0:
@@ -220,22 +221,24 @@ def get_structure(model,pages,scores,pairs,seq):
                     page1_chars = ('(',')')
                     page2_chars = ('[',']')
                     chars_set = True
-                structure[i] = page1_chars[0]
-                structure[j] = page1_chars[1]
+                # subtract 1 for 0-indexing
+                structure[i-1] = page1_chars[0]
+                structure[j-1] = page1_chars[1]
                 print('X[{}][{}] = {}'.format(i,j,bp_a))
             elif bp_b:
                 if not chars_set:
                     page2_chars = ('(',')')
                     page1_chars = ('[',']')
                     chars_set = True
-                structure[i] = page2_chars[0]
-                structure[j] = page2_chars[1]
+                # subtract 1 for 0-indexing
+                structure[i-1] = page2_chars[0]
+                structure[j-1] = page2_chars[1]
                 print('Y[{}][{}] = {}'.format(i,j,bp_b))
 
     structure = ''.join(structure)
     return structure,total_energy
 
 if __name__ == '__main__':
-    
-    for a in parse_fasta('PKB115.fa'):
-        predict_structure(a)
+   
+    for seq in parse_fasta('PKB147.fa'):
+        predict_structure(seq)
