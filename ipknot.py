@@ -34,6 +34,18 @@ def no_internal_pks(pages,pairs,probs,n):
                     pbar.update(1)
     return conditions
 
+def no_bifurcations(pages,pairs,probs,n):
+    p1 = pages[0]
+    p2 = pages[1]
+    conditions = []
+    with tqdm(total = 2*len(pairs)**2) as pbar:
+        for i,j in pairs:
+            for k,l in pairs:
+                if j < k:
+                    conditions.append(Not(And(p2[i][j],p2[k][l])))
+                pbar.update(1)
+    return conditions
+
 # every bp on pg2 must have a pk on pg1
 # eq 7
 def yes_external_pks(pages,pairs,probs,n):
@@ -68,7 +80,7 @@ def no_isolated_pairs(pages,pairs,probs,n):
             if i+1 in page and j-1 in page[i+1]:
                 neighbors.append(page[i+1][j-1])
             # if (i,j) is a pair, (i-1,j+1) or (i+1,j-1) must be a pair
-            if len(neighbors) >0:
+            if len(neighbors) > 0:
                 stack_required = Implies(page[i][j],Or(neighbors))
                 conditions.append(stack_required)
             # no neighbor means this is an illegal isolated` bp
@@ -77,7 +89,13 @@ def no_isolated_pairs(pages,pairs,probs,n):
     return conditions
 
 def structural_constraints(pages,pairs,probs,n):
-    return yes_external_pks(pages,pairs,probs,n) +one_pairing(pages,pairs,probs,n) +no_internal_pks(pages,pairs,probs,n) + no_isolated_pairs(pages,pairs,probs,n)
+    
+    total=one_pairing(pages,pairs,probs,n) 
+    total += yes_external_pks(pages,pairs,probs,n)
+    total+=no_internal_pks(pages,pairs,probs,n)
+    total+= no_isolated_pairs(pages,pairs,probs,n)
+    total+=no_bifurcations(pages,pairs,probs,n)
+    return total
 
 def score_constraints(pages,scores,pairs,probs,n):
     constraints = []
@@ -96,13 +114,17 @@ def score_threshold_constraint(scores,pairs,threshold):
     for score in scores:
         for i,j in pairs:
             total.append(score[i][j])
-    free_energy = GT(Plus(total),Real(threshold))
-    return free_energy
+    print('{},{},{}'.format(threshold*0.98,threshold,threshold*1.02))
+    #lo = GT(Plus(total),Real(threshold*0.98))
+    #high = LT(Plus(total),Real(threshold*1.02))
+    #return high,lo
+    return GT(Plus(total),Real(threshold))
 
 def predict_structure(seq,doubleknots=False):
 
     # legal pairs, lookup table
     pairs,probs = make_adjacency_dict(seq, len(seq))
+    print("# pairs = {}".format(len(pairs)))
 
     # intialize pairing and score variables for two pages based on LinearPartition probs
     p1 = {}
@@ -123,10 +145,10 @@ def predict_structure(seq,doubleknots=False):
         E = Symbol('e_{},{}'.format(i,j),REAL)
         e1[i][j] = e
         e2[i][j] = E
-    
+   
     structural = structural_constraints([p1,p2],pairs,probs,len(seq))  
     score = score_constraints([p1,p2],[e1,e2],pairs,probs,len(seq))
-    thresh = score_threshold_constraint([e1,e2],pairs,10)
+    thresh = score_threshold_constraint([e1,e2],pairs,63)
     all_constraints = structural+ score + [thresh]
     s = time.time()
     solution = solve_SMT(all_constraints,[p1,p2],[e1,e2],pairs,seq)
@@ -240,5 +262,5 @@ def get_structure(model,pages,scores,pairs,seq):
 
 if __name__ == '__main__':
    
-    for seq in parse_fasta('PKB147.fa'):
+    for seq in parse_fasta('CRW_00614.fa'):
         predict_structure(seq)
