@@ -17,9 +17,9 @@ def get_matrix(f, l): # give it a filename and the sequence length
 
 def get_adjacency_dict(f,l):
     
-    k = 3
+    k = 5
     MIN_THRESH = 1/(2**k+1) 
-    print("MIN_THRESH = {}".format(MIN_THRESH))
+    
     pairs = []
     storage = defaultdict(lambda : defaultdict(int))
     with open(f) as inFile:
@@ -55,13 +55,27 @@ def make_adjacency_dict(f, l):
 def parse_fasta(f):
     with open(f) as inFile:
         for record in SeqIO.parse(inFile,'fasta'):
-            yield record.seq
+            yield record.id,record.seq
 
 def to_uppercase(seq):
     return seq.upper()
 
 def to_dot_bracket(struct):
     return struct.replace(':','.')
+
+def load_ground_truth(f):
+    gt = {}
+    names = []
+    with open(f) as inFile:
+        entries = inFile.read().split('>')[1:]
+        print(entries)
+        for e in entries:
+            l = e.lstrip().rstrip()
+            name,struct = l.split('\n')
+            gt[name] = struct
+            names.append(name)
+    print(names)
+    return gt
 
 def find_bps(struct):
 
@@ -142,6 +156,7 @@ def reverse_engineer_partition(seq,true_struct):
 
 if __name__ == '__main__':
 
-    pkb147 = "AUAAUAGAAUAGGACGUUUGGUUCUAUUUUGUUGGUUUCUAGGACCAUCGU"
-    pkb147_struct = to_dot_bracket(":((((((((((:::[[::[[[[[[)))))))))):::::::]]]]]]:]]:")
-    reverse_engineer_partition(pkb147,pkb147_struct)
+    print(load_ground_truth('all_PKB_structs.txt'))
+    #pkb147 = "AUAAUAGAAUAGGACGUUUGGUUCUAUUUUGUUGGUUUCUAGGACCAUCGU"
+    #pkb147_struct = to_dot_bracket(":((((((((((:::[[::[[[[[[)))))))))):::::::]]]]]]:]]:")
+    #reverse_engineer_partition(pkb147,pkb147_struct)
