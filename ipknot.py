@@ -322,16 +322,17 @@ if __name__ == '__main__':
  
     gt = load_ground_truth('all_PKB_structs.txt')
 
-    with open('trials.csv','w') as outFile:
-        for k1 in range(2,7):
-            for k2 in range(k1,0,-1):
-                print(k1,k2)
-                header = ['name' , 'seq' , 'len', 'MEA_score' , 'MEA_struct' ,'time' , 'k1', 'k2', 'pairs1','pairs2','iterations' ,'pred_struct' ,\
-                        'pred_score' ,'recall','precision','f1','lp_recall','lp_precision','lp_f1']
-                outFile.write(','.join(header)+'\n')
-                for name,seq in parse_fasta('all_PKB.fa'): 
-                    truth = gt[name]
-                    summary  = predict_structure(seq,name,k1,k2)
-                    summary = add_evaluation_metrics(summary,truth)
-                    line = [str(summary[x]) for x in header]
-                    outFile.write(','.join(line)+'\n')
+    with open('real_trials.csv','a') as outFile:
+        header = ['name' , 'seq' , 'len', 'MEA_score' , 'MEA_struct' ,'time' , 'k1', 'k2', 'pairs1','pairs2','iterations' ,'pred_struct' ,\
+                'pred_score' ,'recall','precision','f1','lp_recall','lp_precision','lp_f1']
+        outFile.write(','.join(header)+'\n')
+        #for k1 in range(2,6):
+        k1 = 5
+        for k2 in range(k1-1,0,-1):
+            print(k1,k2)
+            for name,seq in parse_fasta('all_PKB.fa'): 
+                truth = gt[name]
+                summary  = predict_structure(seq,name,k1,k2)
+                summary = add_evaluation_metrics(summary,truth)
+                line = [str(summary[x]) for x in header]
+                outFile.write(','.join(line)+'\n')
