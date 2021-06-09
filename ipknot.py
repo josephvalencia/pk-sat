@@ -171,8 +171,8 @@ def predict_structure(seq,name,k1,k2):
     
     best_struct = mea_struct
     best_score = 0
-    growth_rate = 1.01
-    threshold = growth_rate*mea_score
+    growth_rate = 1.001
+    threshold = 0.95*mea_score
     verbose = False
     total_elapsed = 0
     MAX_TIME = 600
@@ -191,6 +191,11 @@ def predict_structure(seq,name,k1,k2):
             print('Something went wrong')
             break
 
+        elapsed = time.time() - s
+        total_elapsed += elapsed
+        threshold *= growth_rate
+        num_iter +=1
+        
         if solution is not None:
             structure,mea = solution
             best_struct = structure
@@ -199,17 +204,12 @@ def predict_structure(seq,name,k1,k2):
             print('No solution found')
             break
         
-        elapsed = time.time() - s
         if verbose:
             print('_______________\nit # {} @  score thresh = {}'.format(it,threshold))
             print('Predicted  = {}'.format(structure))
             print('Expected accuracy score = {}'.format(mea))
             print('Time elapsed = {} seconds'.format(elapsed))
         
-        total_elapsed += elapsed
-        threshold *= growth_rate
-        num_iter +=1
-
     summary = {'name' : name , 'seq' : str(seq) , 'len' : len(seq), 'MEA_score' : mea_score, 'MEA_struct' : mea_struct,'time' : total_elapsed, \
             'iterations' : num_iter ,  'k1' : k1, 'k2' : k2, 'pairs1' : len(p1_pairs) , 'pairs2' : len(p2_pairs),'pred_struct' : best_struct , 'pred_score' : best_score}
     return summary
@@ -321,18 +321,16 @@ def add_evaluation_metrics(summary,truth):
 if __name__ == '__main__':
  
     gt = load_ground_truth('all_PKB_structs.txt')
-
-    with open('real_trials.csv','a') as outFile:
+    with open('trials_tmp.csv','w') as outFile:
         header = ['name' , 'seq' , 'len', 'MEA_score' , 'MEA_struct' ,'time' , 'k1', 'k2', 'pairs1','pairs2','iterations' ,'pred_struct' ,\
                 'pred_score' ,'recall','precision','f1','lp_recall','lp_precision','lp_f1']
         outFile.write(','.join(header)+'\n')
-        #for k1 in range(2,6):
-        k1 = 5
-        for k2 in range(k1-1,0,-1):
-            print(k1,k2)
-            for name,seq in parse_fasta('all_PKB.fa'): 
-                truth = gt[name]
-                summary  = predict_structure(seq,name,k1,k2)
-                summary = add_evaluation_metrics(summary,truth)
-                line = [str(summary[x]) for x in header]
-                outFile.write(','.join(line)+'\n')
+        for k1 in range(2,3):
+            for k2 in range(k1,0,-1):
+                print(k1,k2)
+                for name,seq in parse_fasta('all_PKB.fa'): 
+                    truth = gt[name]
+                    summary  = predict_structure(seq,name,k1,k2)
+                    summary = add_evaluation_metrics(summary,truth)
+                    line = [str(summary[x]) for x in header]
+                    outFile.write(','.join(line)+'\n')

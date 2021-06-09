@@ -66,7 +66,9 @@ def load_ground_truth(f):
         entries = inFile.read().split('>')[1:]
         for e in entries:
             l = e.lstrip().rstrip()
-            name,struct = l.split('\n')
+            fields = l.split('\n')
+            name = fields[0]
+            struct = ''.join(fields[1:])
             gt[name] = struct
             names.append(name)
     return gt

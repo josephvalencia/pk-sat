@@ -89,6 +89,7 @@ def predict_structure(seq, doubleknots=False):
         total_elapsed += elapsed
 
     print('***************\nBest Solution')
+    print('Sequence = {}'.format(seq))
     print('Predicted = {}'.format(best_struct))
     print('Free Energy = {}'.format(best_fe))
     print('Total time elapsed = {} seconds'.format(total_elapsed))
