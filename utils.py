@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import os,subprocess
 from Bio import SeqIO
 from collections import defaultdict
@@ -16,7 +17,7 @@ def get_matrix(f, l): # give it a filename and the sequence length
     return m # this matrix is very sparse, don't be surprised if it's hard to find non-zero values
 
 def get_adjacency_dict(f,l,theta):
-    
+
     pairs = []
     storage = defaultdict(lambda : defaultdict(int))
     with open(f) as inFile:
@@ -27,7 +28,7 @@ def get_adjacency_dict(f,l,theta):
                 if p > theta:
                     storage[i][j] = p
                     pairs.append((i,j))
-    
+
     return pairs,storage
 
 # give a sequence, interface with LinearPartition to generate readable files of bp probs and PK-free MEA structure
@@ -108,7 +109,7 @@ def find_bps(struct):
             if count == 0:
                 # plus one for 1-base
                 bp_list.append((p+1,j+1))
-                break 
+                break
     return bp_list
 
 def recall_precision(pred,true):
@@ -131,7 +132,7 @@ def recall_precision(pred,true):
     return recall,precision
 
 def reverse_engineer_mea(seq,name):
-   
+
     mea_file = f'mea_struct_{name}_tmp_1'
     with open(mea_file) as inFile:
         lines = inFile.readlines()
@@ -139,13 +140,13 @@ def reverse_engineer_mea(seq,name):
 
     probs_file = f'prob_matrix_{name}_tmp_1'
     log_file = f'log_{name}_tmp.txt'
-    
+
     pairs = find_bps(mea_struct)
     # work backwards from MEA structure and sum all bp probs
     for s,e in pairs:
         os.system(f'grep \"{s} {e}\" {probs_file} >> {log_file}')
     result = subprocess.run(['awk','{s+=$3}END{print s}',f'{log_file}'],stdout=subprocess.PIPE)
-    
+
     score = float(result.stdout.decode('utf-8'))
     return mea_struct,score
 
@@ -160,6 +161,11 @@ def cleanup_files(name):
     safe_remove(f'mea_struct_{name}_tmp_1')
     safe_remove(f'log_{name}_tmp.txt')
 
-if __name__ == '__main__':
+# create a string repr'ing a latex table from a csv file
+def mkLaTexTable(fname, usecols=None):
+    df = pd.read_csv(fname)
+    return df.to_latex(index=False, columns=['name', 'len', 'MEA_score', 'time', 'iterations'])
 
-    print(load_ground_truth('all_PKB_structs.txt'))
+if __name__ == '__main__':
+    print(mkLaTexTable('trials.csv'))
+    # print(load_ground_truth('all_PKB_structs.txt'))
