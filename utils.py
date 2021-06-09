@@ -1,5 +1,5 @@
-import numpy.matlib as np
-import os
+import numpy as np
+import os,subprocess
 from Bio import SeqIO
 from collections import defaultdict
 
@@ -15,10 +15,7 @@ def get_matrix(f, l): # give it a filename and the sequence length
     f.close()
     return m # this matrix is very sparse, don't be surprised if it's hard to find non-zero values
 
-def get_adjacency_dict(f,l):
-    
-    k = 5
-    MIN_THRESH = 1/(2**k+1) 
+def get_adjacency_dict(f,l,theta):
     
     pairs = []
     storage = defaultdict(lambda : defaultdict(int))
@@ -27,29 +24,27 @@ def get_adjacency_dict(f,l):
             if len(line.split()): # ignore blank line
                 (i, j, p) = [float(s) for s in line.split()] # get vals as floats
                 (i, j)    = map(lambda x: int(x), (i, j))
-                if p > MIN_THRESH:
+                if p > theta:
                     storage[i][j] = p
                     pairs.append((i,j))
     
     return pairs,storage
 
-# give a sequence (as a filename), interface with LinearPartition to generate a readable file for it
-def make_matrix_file(f):
-    os.system(f'echo {f} | ../LinearPartition/linearpartition --prefix ./prob_matrix-tmp')
+# give a sequence, interface with LinearPartition to generate readable files of bp probs and PK-free MEA structure
+def make_LinearPartition_files(f,name):
+    cmd = f'echo {f} | ../LinearPartition/linearpartition --prefix ./prob_matrix_{name}_tmp -M --mea_prefix ./mea_struct_{name}_tmp'
+    print(cmd)
+    os.system(cmd)
 
 # combine above 2 functions (hacky patch with file creation and deletion)
-def make_matrix(f, l):
-    make_matrix_file(f)
-    f = f'prob_matrix-{f}_1'
+def make_matrix(f,name, l):
+    f = f'prob_matrix_{name}_tmp_1'
     m = get_matrix(f, l)
-    os.system(f'rm {f}')
     return m
 
-def make_adjacency_dict(f, l):
-    make_matrix_file(f)
-    f = f'prob_matrix-tmp_1'
-    m = get_adjacency_dict(f, l)
-    os.system(f'rm {f}')
+def make_adjacency_dict(f,name, l,theta):
+    f = f'prob_matrix_{name}_tmp_1'
+    m = get_adjacency_dict(f, l,theta)
     return m
 
 def parse_fasta(f):
@@ -68,13 +63,11 @@ def load_ground_truth(f):
     names = []
     with open(f) as inFile:
         entries = inFile.read().split('>')[1:]
-        print(entries)
         for e in entries:
             l = e.lstrip().rstrip()
             name,struct = l.split('\n')
             gt[name] = struct
             names.append(name)
-    print(names)
     return gt
 
 def find_bps(struct):
@@ -125,38 +118,48 @@ def recall_precision(pred,true):
     TP = 0
     FP = 0
     FN = 0
-    
     for p in pred_set:
         if p in true_set:
             TP+=1
             true_set.remove(p)
         else:
             FP+=1
-    
+
     FN = len(true_set)
     recall = 0 if TP+FN == 0 else TP/(TP+FN)
     precision = 0 if TP+FP == 0 else TP/(TP+FP)
     return recall,precision
 
-# FOR DEBUGGING ONLY
-def reverse_engineer_partition(seq,true_struct):
+def reverse_engineer_mea(seq,name):
+   
+    mea_file = f'mea_struct_{name}_tmp_1'
+    with open(mea_file) as inFile:
+        lines = inFile.readlines()
+        mea_struct = lines[1].rstrip()
+
+    probs_file = f'prob_matrix_{name}_tmp_1'
+    log_file = f'log_{name}_tmp.txt'
     
-    make_matrix_file(seq)
-    f = f'prob_matrix-tmp_1'
-    pairs = find_bps(true_struct)
-    log = "log_tmp.txt" 
-    print(pairs)
+    pairs = find_bps(mea_struct)
+    # work backwards from MEA structure and sum all bp probs
     for s,e in pairs:
-        os.system(f'grep \"{s} {e}\" {f} >> {log}')
+        os.system(f'grep \"{s} {e}\" {probs_file} >> {log_file}')
+    result = subprocess.run(['awk','{s+=$3}END{print s}',f'{log_file}'],stdout=subprocess.PIPE)
     
-    print('Extracted partition function')
-    os.system('awk \'{s+=$3}END{print s}\''+f' {log}') 
-    os.system(f'rm {log}')
-    os.system(f'rm {f}')
+    score = float(result.stdout.decode('utf-8'))
+    return mea_struct,score
+
+def safe_remove(filename):
+    try:
+        os.remove(filename)
+    except OSError:
+        pass
+
+def cleanup_files(name):
+    safe_remove(f'prob_matrix_{name}_tmp_1')
+    safe_remove(f'mea_struct_{name}_tmp_1')
+    safe_remove(f'log_{name}_tmp.txt')
 
 if __name__ == '__main__':
 
     print(load_ground_truth('all_PKB_structs.txt'))
-    #pkb147 = "AUAAUAGAAUAGGACGUUUGGUUCUAUUUUGUUGGUUUCUAGGACCAUCGU"
-    #pkb147_struct = to_dot_bracket(":((((((((((:::[[::[[[[[[)))))))))):::::::]]]]]]:]]:")
-    #reverse_engineer_partition(pkb147,pkb147_struct)

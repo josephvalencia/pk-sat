@@ -274,7 +274,7 @@ def get_structure(model,p1,p2,e1,e2,seq):
 if __name__ == "__main__":
 
     pkb115_seq = 'CGGUAGCGCGAACCUUAUCGCGCA'
-    #pkb115_seq = 'UAGGCCUA'
     pkb115_struct = '.(((.[[[[[[)))...]]]]]].'
-    #seq = 'AUAAUAGAAUAGGACGUUUGGUUCUAUUUUGUUGGUUUCUAGGACCAUCGU'
     predict_structure(pkb115_seq,doubleknots=False)
+
+
