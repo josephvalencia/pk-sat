@@ -19,7 +19,9 @@ def one_pairing(page_set,pair_set,probs,n):
                 if b == i or a == i:
                     unique.append(page[a][b])
         # only one bp allowed
-        conditions.append(AtMostOne(unique))
+        if len(unique) > 0:
+            conditions.append(AtMostOne(unique))
+    #print('Unique bps',conditions)
     return conditions
 
 # no internal pseudoknots
@@ -32,6 +34,7 @@ def no_internal_pks(page_set,pair_set,probs,n):
                 # this ordering indicates a pk, so both bp cannot be true
                 if i < k and k < j and j < l:
                     conditions.append(Not(And(page[i][j],page[k][l])))
+    #print('Internal PKs',conditions) 
     return conditions
 
 # as complex PKs should be rare, bifurcations are not allowed on pg2
@@ -45,6 +48,7 @@ def no_bifurcations(page_set,pair_set,probs,n):
         for k,l in p2_pairs:
             if j < k:
                 conditions.append(Not(And(p2[i][j],p2[k][l])))
+    #print('bifurcations',conditions)
     return conditions
 
 # every bp on pg2 must have a pk on pg1
@@ -68,6 +72,7 @@ def yes_external_pks(page_set,pair_set,probs,n):
         # no bp from other page -> (i,j) not a bp
         else:
             conditions.append(Not(p2[k][l]))
+    #print('external Pks',conditions)
     return conditions
 
 # eq 8 and 9
@@ -91,6 +96,7 @@ def no_isolated_pairs(page_set,pair_set,probs,n):
             # no neighbor means this is an illegal isolated` bp
             else:
                 conditions.append(Not(page[i][j]))
+    #print('no isolated',conditions)
     return conditions
 
 def structural_constraints(pages,pairs,probs,n):
@@ -131,9 +137,10 @@ def predict_structure(seq,name,k1,k2):
     # legal pairs, lookup table
     make_LinearPartition_files(seq,name)
 
-    theta_p1 = 1/(2**k1+1)
-    theta_p2 = 1/(2**k2+1) 
-    
+    #theta_p1 = 1/(2**k1+1)
+    #theta_p2 = 1/(2**k2+1) 
+    theta_p1 = 0
+    theta_p2 = 0
     p1_pairs,probs = make_adjacency_dict(seq,name, len(seq),theta_p1)
     mea_struct,mea_score = reverse_engineer_mea(seq,name)
     print('Starting threshold = {}'.format(mea_score))
@@ -171,18 +178,18 @@ def predict_structure(seq,name,k1,k2):
     
     best_struct = mea_struct
     best_score = 0
-    growth_rate = 1.001
-    threshold = 0.95*mea_score
-    verbose = False
+    growth_rate = 1.01
+    threshold = 1.0000001*mea_score
+    verbose = True
     total_elapsed = 0
     MAX_TIME = 600
 
-    #signal.signal(signal.SIGALRM, timeout_handler)
     num_iter = 0 
     for it in range(50):
         s = time.time()
         thresh = score_threshold_constraint(all_scores,all_pairs,threshold)
         all_constraints = structural+ score + [thresh]
+        signal.signal(signal.SIGALRM, timeout_handler)
         signal.alarm(MAX_TIME)
         try:
             solution = solve_SMT(all_constraints,all_pages,all_scores,all_pairs,seq)
@@ -193,13 +200,15 @@ def predict_structure(seq,name,k1,k2):
 
         elapsed = time.time() - s
         total_elapsed += elapsed
-        threshold *= growth_rate
         num_iter +=1
         
         if solution is not None:
             structure,mea = solution
-            best_struct = structure
-            best_score = mea
+            if mea > best_score:
+                best_struct = structure
+                best_score = mea
+            else:
+                break
         else:
             print('No solution found')
             break
@@ -210,6 +219,8 @@ def predict_structure(seq,name,k1,k2):
             print('Expected accuracy score = {}'.format(mea))
             print('Time elapsed = {} seconds'.format(elapsed))
         
+        threshold = max(best_score,growth_rate *threshold)
+    
     summary = {'name' : name , 'seq' : str(seq) , 'len' : len(seq), 'MEA_score' : mea_score, 'MEA_struct' : mea_struct,'time' : total_elapsed, \
             'iterations' : num_iter ,  'k1' : k1, 'k2' : k2, 'pairs1' : len(p1_pairs) , 'pairs2' : len(p2_pairs),'pred_struct' : best_struct , 'pred_score' : best_score}
     return summary
@@ -296,9 +307,9 @@ def add_evaluation_metrics(summary,truth):
     
     pred = summary['pred_struct']
     linear_partition_pred = summary['MEA_struct']
-    
     # score our prediction
     truth = to_dot_bracket(truth)
+    summary['true_struct'] = truth  
     true_bp = find_bps(truth)
     pred_bp = find_bps(pred)
     recall,precision = recall_precision(pred_bp,true_bp)
@@ -316,21 +327,34 @@ def add_evaluation_metrics(summary,truth):
     summary['lp_precision'] = lp_precision
     lp_f1 = 0 if lp_precision + lp_recall == 0 else 2*lp_precision*lp_recall/(lp_precision+lp_recall)
     summary['lp_f1'] = lp_f1
+    
     return summary
 
 if __name__ == '__main__':
- 
-    gt = load_ground_truth('all_PKB_structs.txt')
-    with open('trials_tmp.csv','w') as outFile:
-        header = ['name' , 'seq' , 'len', 'MEA_score' , 'MEA_struct' ,'time' , 'k1', 'k2', 'pairs1','pairs2','iterations' ,'pred_struct' ,\
+
+    #seq = "UAGUGUUCGUGGAUAACACUUUAAUUAAGAUUCAUA"
+    #seq = "UGUUCCUUGGAUUGCUACGUUCACCAGAUUUGUGUAAUCUGGCCGUUAGGAACUUAAAAUUGCGCG"
+    seq = "CGGUGCUUUUAUGUUCACCGAAAUCGAACAUA"
+    struct = ":((((::::[[[[[[))))::::::]:]]]]]:"
+    k1 = 50
+    k2 = 50
+    summary  = predict_structure(seq,'PKB205',k1,k2)
+    #gt = load_ground_truth('longer_structs.txt')
+    #gt = load_ground_truth('all_PKB_structs.txt')
+    ''' 
+    with open('trials4.csv','w') as outFile:
+        header = ['name' , 'seq' , 'len','true_struct', 'MEA_score' , 'MEA_struct' ,'time' , 'k1', 'k2', 'pairs1','pairs2','iterations' ,'pred_struct' ,\
                 'pred_score' ,'recall','precision','f1','lp_recall','lp_precision','lp_f1']
         outFile.write(','.join(header)+'\n')
-        for k1 in range(2,3):
+        for k1 in range(2,5):
             for k2 in range(k1,0,-1):
                 print(k1,k2)
                 for name,seq in parse_fasta('all_PKB.fa'): 
+                #for name,seq in parse_fasta('longer.fa'): 
                     truth = gt[name]
+                    print(truth)
                     summary  = predict_structure(seq,name,k1,k2)
                     summary = add_evaluation_metrics(summary,truth)
                     line = [str(summary[x]) for x in header]
                     outFile.write(','.join(line)+'\n')
+    '''

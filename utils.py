@@ -133,12 +133,15 @@ def recall_precision(pred,true):
     precision = 0 if TP+FP == 0 else TP/(TP+FP)
     return recall,precision
 
-def reverse_engineer_mea(seq,name):
+def reverse_engineer_mea(seq,name,struct=None):
 
-    mea_file = f'mea_struct_{name}_tmp_1'
-    with open(mea_file) as inFile:
-        lines = inFile.readlines()
-        mea_struct = lines[1].rstrip()
+    if struct is None:
+        mea_file = f'mea_struct_{name}_tmp_1'
+        with open(mea_file) as inFile:
+            lines = inFile.readlines()
+            mea_struct = lines[1].rstrip()
+    else:
+        mea_struct = struct
 
     probs_file = f'prob_matrix_{name}_tmp_1'
     log_file = f'log_{name}_tmp.txt'
@@ -166,8 +169,16 @@ def cleanup_files(name):
 # create a string repr'ing a latex table from a csv file
 def mkLaTexTable(fname, usecols=None):
     df = pd.read_csv(fname)
-    return df.to_latex(index=False, columns=['name', 'len', 'MEA_score', 'time', 'iterations'])
+    return df.to_latex(index=False, columns=['name', 'len', 'pred_score', 'time', 'iterations','precision','recall','precision_improvement','recall_improvement'])
 
 if __name__ == '__main__':
-    print(mkLaTexTable('trials.csv'))
+    #print(mkLaTexTable('trials.csv'))
     # print(load_ground_truth('all_PKB_structs.txt'))
+    pkb115_seq = 'CGGUAGCGCGAACCUUAUCGCGCA'
+    pkb115_struct = '.(((.[[[[[[)))...]]]]]].'
+    #make_LinearPartition_files(pkb115_seq,'pkb115')
+    #print(reverse_engineer_mea(pkb115_seq,'pkb115'))
+    #cleanup_files('pkb115')
+    make_LinearPartition_files(pkb115_seq,'pkb115')
+    print(reverse_engineer_mea(pkb115_seq,'pkb115',struct=pkb115_struct))
+    cleanup_files('pkb115')
