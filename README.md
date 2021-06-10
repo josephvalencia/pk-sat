@@ -1,4 +1,4 @@
-# Installing Z3
+## Installing Z3
 
 ```
 git clone https://github.com/Z3Prover/z3.git
@@ -31,12 +31,12 @@ cat ../pk-sat/CRW_00774.fa | ./linearpartition --prefix ./prob_matrix
 You should see output in the text file prob_matrix_1
 
 ## Testing Baseline
-To test the baseline model (Ganesh et al 2012), run
+To test the baseline model ([Ganesh et al 2012](https://dl.acm.org/doi/10.1007/978-3-642-31612-8_12)), run
 ```
 python pksat.py
 ```
 ## Testing Advanced
-To test the advanced model (Sato et al 2011), run:
+To test the advanced model ([Sato et al 2011](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3117384/), run:
 ```
 python ipknot.py
 ```
